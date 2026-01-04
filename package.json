@@ -1,0 +1,31 @@
+{
+  "name": "arc-binary-options",
+  "version": "1.0.0",
+  "description": "Binary options platform on Arc network",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy": "hardhat run scripts/deploy-arcs.js --network arc-testnet",
+    "deploy:localhost": "hardhat run scripts/deploy-arcs.js --network localhost",
+    "dev": "cd frontend && npm run dev",
+    "oracle-service": "node backend/oracle-service.js",
+    "authorize-oracle": "hardhat run scripts/authorize-oracle.js --network arc-testnet",
+    "sync-house": "hardhat run scripts/sync-house-capital.js --network arc-testnet",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "setup": "npm run install:all && npx hardhat compile"
+  },
+  "keywords": [
+    "arc",
+    "binary-options",
+    "defi",
+    "usdc"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@openzeppelin/contracts": "^5.4.0",
+    "dotenv": "^16.3.1",
+    "hardhat": "^2.19.4"
+  }
+}
