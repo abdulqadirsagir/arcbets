@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseEther, formatEther } from 'viem'
 import toast from 'react-hot-toast'
-import { CONTRACTS, BETTING_ENGINE_ABI, ARCS_TOKEN_ABI, ASSETS, DURATIONS } from '@/lib/contracts'
+import { CONTRACTS, BETTING_ENGINE_ABI, ARCS_TOKEN_ABI, ORACLE_ABI, ASSETS, DURATIONS } from '@/lib/contracts'
+import { supabase } from '@/lib/supabase'
 
 interface BettingInterfaceARCSProps {
   onAssetChange?: (asset: string) => void
@@ -17,6 +18,9 @@ export default function BettingInterfaceARCS({ onAssetChange }: BettingInterface
   const [duration, setDuration] = useState(3600) // 1 hour default
   const [betAmount, setBetAmount] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
+  const [currentPrice, setCurrentPrice] = useState<bigint | null>(null)
+  const [priceTimestamp, setPriceTimestamp] = useState<bigint | null>(null)
+  const [isPriceStale, setIsPriceStale] = useState(false)
 
   // Get user's ARCS balance
   const { data: arcsBalance } = useReadContract({
@@ -64,6 +68,59 @@ export default function BettingInterfaceARCS({ onAssetChange }: BettingInterface
   const selectedDuration = DURATIONS.find(d => d.value === duration)
   const multiplier = selectedDuration?.multiplier || 1.5
   const potentialPayout = betAmount ? (parseFloat(betAmount) * multiplier).toFixed(2) : '0'
+
+  // Fetch current price for selected asset
+  const { data: oraclePrice } = useReadContract({
+    address: CONTRACTS.ORACLE as `0x${string}`,
+    abi: ORACLE_ABI,
+    functionName: 'getPrice',
+    args: [selectedAsset],
+    query: { 
+      enabled: !!selectedAsset,
+      refetchInterval: 10000 // Refetch every 10 seconds
+    }
+  })
+
+  // Update current price when oracle data changes
+  useEffect(() => {
+    if (oraclePrice && Array.isArray(oraclePrice)) {
+      const [price, timestamp] = oraclePrice as [bigint, bigint]
+      setCurrentPrice(price)
+      setPriceTimestamp(timestamp)
+      
+      // Check if price is stale (older than 10 minutes)
+      const now = Math.floor(Date.now() / 1000)
+      const age = now - Number(timestamp)
+      setIsPriceStale(age > 600)
+    }
+  }, [oraclePrice])
+
+  // Subscribe to real-time price updates from Supabase
+  useEffect(() => {
+    const channel = supabase
+      .channel(`betting_price_${selectedAsset}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'price_history',
+          filter: `asset=eq.${selectedAsset}`,
+        },
+        (payload) => {
+          console.log(`Real-time price update for betting ${selectedAsset}:`, payload.new)
+          const newPrice = BigInt(payload.new.price)
+          setCurrentPrice(newPrice)
+          setPriceTimestamp(BigInt(Math.floor(new Date(payload.new.timestamp).getTime() / 1000)))
+          setIsPriceStale(false)
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [selectedAsset])
 
   // Handle approval
   const handleApprove = async () => {
@@ -113,6 +170,17 @@ export default function BettingInterfaceARCS({ onAssetChange }: BettingInterface
       return
     }
 
+    // Check if price is stale
+    if (isPriceStale) {
+      toast.error('Price data is stale. Please wait for fresh price update.')
+      return
+    }
+
+    if (!currentPrice) {
+      toast.error('Price data not available. Please wait...')
+      return
+    }
+
     // Check if approval is needed
     const amountInWei = parseEther(betAmount)
     const currentAllowance = allowance as bigint || 0n
@@ -125,13 +193,20 @@ export default function BettingInterfaceARCS({ onAssetChange }: BettingInterface
     setIsProcessing(true)
 
     try {
+      const formattedPrice = (Number(currentPrice) / 1e8).toLocaleString('en-US', { 
+        minimumFractionDigits: 2, 
+        maximumFractionDigits: 2 
+      })
+
       console.log('🎲 Placing bet with:', {
         contract: CONTRACTS.BETTING_ENGINE,
         asset: selectedAsset,
         duration: duration,
         isLong: isLong,
         amount: betAmount,
-        amountInWei: amountInWei.toString()
+        amountInWei: amountInWei.toString(),
+        entryPrice: currentPrice.toString(),
+        entryPriceUSD: formattedPrice
       })
 
       await placeBet({
@@ -141,7 +216,7 @@ export default function BettingInterfaceARCS({ onAssetChange }: BettingInterface
         args: [selectedAsset, isLong, amountInWei, BigInt(duration)],
       })
 
-      toast.success(`Placing ${betAmount} ARCS bet on ${selectedAsset}...`)
+      toast.success(`Placing ${betAmount} ARCS bet on ${selectedAsset} @ $${formattedPrice}`)
     } catch (error: any) {
       console.error('Bet placement error:', error)
       toast.error(error.message || 'Failed to place bet')
@@ -180,6 +255,41 @@ export default function BettingInterfaceARCS({ onAssetChange }: BettingInterface
   return (
     <div className="bg-arc-card border border-arc-primary/20 rounded-lg p-6">
       <h2 className="text-2xl font-bold text-white mb-6">🎲 Place Your Bet</h2>
+
+      {/* Current Price Display */}
+      {currentPrice && (
+        <div className={`mb-6 p-4 rounded-lg border-2 ${isPriceStale ? 'bg-red-900/20 border-red-500' : 'bg-arc-bg border-arc-primary/30'}`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs text-gray-400 mb-1">Entry Price for {selectedAsset}</div>
+              <div className="text-2xl font-bold text-white">
+                ${(Number(currentPrice) / 1e8).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              <div className={`w-3 h-3 rounded-full ${isPriceStale ? 'bg-red-500' : 'bg-green-500 animate-pulse'}`} />
+              {priceTimestamp && (
+                <div className={`text-xs ${isPriceStale ? 'text-red-400' : 'text-gray-400'}`}>
+                  {(() => {
+                    const now = Math.floor(Date.now() / 1000)
+                    const seconds = now - Number(priceTimestamp)
+                    if (seconds < 60) return `${seconds}s ago`
+                    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
+                    return `${Math.floor(seconds / 3600)}h ago`
+                  })()}
+                  {isPriceStale && ' ⚠️'}
+                </div>
+              )}
+            </div>
+          </div>
+          {isPriceStale && (
+            <div className="mt-2 text-xs text-red-400 flex items-center gap-1">
+              <span>⚠️</span>
+              <span>Price is stale. Betting disabled until fresh update.</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Asset Selection */}
       <div className="mb-6">
