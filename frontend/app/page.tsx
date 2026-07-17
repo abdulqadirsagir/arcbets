@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import Header from '@/components/Header'
 import PriceDisplay from '@/components/PriceDisplay'
 import HousePoolStatsARCS from '@/components/HousePoolStatsARCS'
