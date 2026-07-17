@@ -16,8 +16,8 @@
     "react": "^18",
     "react-dom": "^18",
     "react-hot-toast": "^2.4.1",
-    "wagmi": "^2.5.7",
     "viem": "^2.7.13",
+    "wagmi": "^2.5.7",
     "@rainbow-me/rainbowkit": "^2.0.2"
   },
   "devDependencies": {
