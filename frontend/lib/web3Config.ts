@@ -2,8 +2,8 @@ import { createConfig, http } from 'wagmi'
 import { defineChain } from 'viem'
 import { injected } from 'wagmi/connectors'
 
-// Arc Testnet official RPC only
-const ARC_RPC = 'https://rpc.testnet.arc.network'
+// Arc Testnet official RPC via Alchemy
+const ARC_RPC = 'https://arc-testnet.g.alchemy.com/v2/Zrrgg6ApgMN7yfwmHqzl2zd95dZXPQJg'
 
 // Define Arc Testnet chain
 export const arcTestnet = defineChain({

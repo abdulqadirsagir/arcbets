@@ -1,7 +1,3 @@
-require("@nomicfoundation/hardhat-toolbox");
-require("dotenv").config();
-
-/** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
   solidity: {
     version: "0.8.20",
@@ -15,12 +11,12 @@ module.exports = {
   },
   networks: {
     arc: {
-      url: process.env.ARC_RPC_URL || "https://rpc.testnet.arc.network",
+      url: process.env.ARC_RPC_URL || "https://arc-testnet.g.alchemy.com/v2/Zrrgg6ApgMN7yfwmHqzl2zd95dZXPQJg",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 5042002,
     },
     "arc-testnet": {
-      url: process.env.ARC_RPC_URL || "https://rpc.testnet.arc.network",
+      url: process.env.ARC_RPC_URL || "https://arc-testnet.g.alchemy.com/v2/Zrrgg6ApgMN7yfwmHqzl2zd95dZXPQJg",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 5042002,
     },
